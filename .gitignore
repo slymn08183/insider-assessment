@@ -1,0 +1,26 @@
+# IDE
+.idea/
+.vscode/
+*.swp
+
+# Binaries
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+
+# Test
+*.test
+*.out
+coverage.html
+
+# Environment
+.env
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Claude
+.claude/
