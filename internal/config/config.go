@@ -20,6 +20,9 @@ type Config struct {
 	// Redis
 	RedisHost string `envconfig:"REDIS_HOST" default:"localhost"`
 	RedisPort string `envconfig:"REDIS_PORT" default:"6379"`
+
+	// Migration
+	AutoMigrate bool `envconfig:"AUTO_MIGRATE" default:"true"`
 }
 
 func Load() (*Config, error) {

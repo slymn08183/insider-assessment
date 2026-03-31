@@ -1,0 +1,36 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: insider
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+
+#  app:
+#    build: .
+#    depends_on:
+#      - postgres
+#      - redis
+#    ports:
+#      - "8080:8080"
+#    environment:
+#      DB_HOST: postgres
+#      DB_PORT: "5432"
+#      DB_USER: postgres
+#      DB_PASSWORD: postgres
+#      DB_NAME: insider
+#      REDIS_HOST: redis
+#      REDIS_PORT: "6379"
+#      SERVER_PORT: "8080"
+
+volumes:
+  postgres_data:
