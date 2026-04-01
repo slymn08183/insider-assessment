@@ -9,7 +9,6 @@ RUN go mod download
 COPY . .
 RUN go build -o server ./cmd/server/
 
-# Run stage — sadece binary, kucuk image
 FROM alpine:3.21
 
 WORKDIR /app
