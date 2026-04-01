@@ -40,18 +40,23 @@ func (r *EventRepository) GetMetrics(q model.MetricsQuery) (*model.MetricsResult
 	}
 
 	// Total count
-	if err := base.Count(&result.TotalCount).Error; err != nil {
+	// &gorm.Session{} creates a fresh copy so the base is not mutated
+	if err := base.Session(&gorm.Session{}).Count(&result.TotalCount).Error; err != nil {
 		return nil, err
 	}
 
 	// Unique users
-	if err := base.Distinct("user_id").Count(&result.UniqueUsers).Error; err != nil {
+	if err := base.Session(&gorm.Session{}).Distinct("user_id").Count(&result.UniqueUsers).Error; err != nil {
 		return nil, err
 	}
 
 	// Breakdown (daily/hourly)
 	if q.GroupBy == "daily" || q.GroupBy == "hourly" {
-		result.Breakdown, _ = r.getBreakdown(base, q.GroupBy)
+		var err error
+		result.Breakdown, err = r.getBreakdown(base.Session(&gorm.Session{}), q.GroupBy)
+		if err != nil {
+			return nil, err
+		}
 	}
 
 	return result, nil
@@ -66,7 +71,7 @@ func (r *EventRepository) getBreakdown(base *gorm.DB, groupBy string) ([]model.B
 
 	var rows []model.BreakdownRow
 	err := base.
-		Select("date_trunc(?, timestamp) as period, count(*) as count, count(distinct user_id) as unique_users", trunc).
+		Select("date_trunc(?, to_timestamp(timestamp)) as period, count(*) as count, count(distinct user_id) as unique_users", trunc).
 		Group("period").
 		Order("period").
 		Find(&rows).Error
