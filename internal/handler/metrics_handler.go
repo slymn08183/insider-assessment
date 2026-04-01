@@ -25,7 +25,7 @@ func (h *MetricsHandler) Get(c *gin.Context) {
 	var query model.MetricsQuery
 
 	if err := c.ShouldBindQuery(&query); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "event_name is required"})
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
 

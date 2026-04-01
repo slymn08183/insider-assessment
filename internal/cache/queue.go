@@ -55,6 +55,72 @@ func (q *EventQueue) CheckAndEnqueue(ctx context.Context, hash string, event *mo
 	return false, nil
 }
 
+// BulkCheckAndEnqueue Bulk version of CheckAndEnqueue.
+// All SetNX + LPush commands in a single pipeline (1 round-trip for N events).
+// Returns accepted, duplicated and rejected counts.
+func (q *EventQueue) BulkCheckAndEnqueue(ctx context.Context, events []model.Event) (accepted, duplicated, rejected int) {
+	type eventData struct {
+		hash string
+		data []byte
+	}
+
+	// Pre-marshal all events
+	items := make([]eventData, 0, len(events))
+	for i := range events {
+		data, err := json.Marshal(&events[i])
+		if err != nil {
+			rejected++
+			continue
+		}
+		items = append(items, eventData{hash: events[i].EventHash, data: data})
+	}
+
+	// Pipeline 1: SetNX for all hashes
+	pipe := q.client.Pipeline()
+	setCmds := make([]*redis.StatusCmd, len(items))
+	for i, item := range items {
+		setCmds[i] = pipe.SetArgs(ctx, dedupPrefix+item.hash, "1", redis.SetArgs{
+			Mode: "NX",
+			TTL:  dedupTTL,
+		})
+	}
+	pipe.Exec(ctx)
+
+	// Filter: only new events (SetNX returned "OK")
+	newItems := make([]eventData, 0, len(items))
+	for i, cmd := range setCmds {
+		if cmd.Val() == "OK" {
+			newItems = append(newItems, items[i])
+		} else {
+			duplicated++
+		}
+	}
+
+	if len(newItems) == 0 {
+		return accepted, duplicated, rejected
+	}
+
+	// Pipeline 2: LPush all new events
+	pipe2 := q.client.Pipeline()
+	for _, item := range newItems {
+		pipe2.LPush(ctx, queueKey, item.data)
+	}
+	_, err := pipe2.Exec(ctx)
+	if err != nil {
+		// Rollback hashes
+		pipe3 := q.client.Pipeline()
+		for _, item := range newItems {
+			pipe3.Del(ctx, dedupPrefix+item.hash)
+		}
+		_, _ = pipe3.Exec(ctx)
+		rejected += len(newItems)
+		return accepted, duplicated, rejected
+	}
+
+	accepted = len(newItems)
+	return accepted, duplicated, rejected
+}
+
 // Dequeue BRPOP
 func (q *EventQueue) Dequeue(ctx context.Context, timeout time.Duration) (*model.Event, error) {
 	result, err := q.client.BRPop(ctx, timeout, queueKey).Result()

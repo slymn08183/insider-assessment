@@ -23,13 +23,23 @@ type Event struct {
 }
 
 func main() {
-	total := flag.Int("n", 20000, "total requests")
+	total := flag.Int("n", 20000, "total events")
 	concurrency := flag.Int("c", 50, "concurrent workers")
-	url := flag.String("url", "http://127.0.0.1:8080/events", "target URL")
+	bulk := flag.Bool("bulk", false, "use bulk endpoint (100 events per request)")
+	batchSize := flag.Int("bs", 100, "events per bulk request")
+	baseURL := flag.String("url", "http://127.0.0.1:8080", "base URL")
 	flag.Parse()
 
-	fmt.Printf("Load test: %d requests, %d concurrent\n", *total, *concurrency)
-	fmt.Printf("Target: %s\n\n", *url)
+	url := *baseURL + "/events"
+	if *bulk {
+		url = *baseURL + "/events/bulk"
+	}
+
+	fmt.Printf("Load test: %d events, %d concurrent", *total, *concurrency)
+	if *bulk {
+		fmt.Printf(", bulk mode (%d events/request, %d requests)", *batchSize, *total / *batchSize)
+	}
+	fmt.Printf("\nTarget: %s\n\n", url)
 
 	var (
 		success int64
@@ -44,8 +54,14 @@ func main() {
 	latencies := make([]time.Duration, 0, *total)
 
 	// Work channel
-	work := make(chan int, *total)
-	for i := 0; i < *total; i++ {
+	var numRequests int
+	if *bulk {
+		numRequests = *total / *batchSize
+	} else {
+		numRequests = *total
+	}
+	work := make(chan int, numRequests)
+	for i := 0; i < numRequests; i++ {
 		work <- i
 	}
 	close(work)
@@ -68,19 +84,34 @@ func main() {
 			defer wg.Done()
 
 			for id := range work {
-				event := Event{
-					EventName:  "product_view",
-					Channel:    "web",
-					CampaignID: fmt.Sprintf("cmp_%d", rand.Intn(100)),
-					UserID:     fmt.Sprintf("user_%d", id),
-					Timestamp:  time.Now().Unix() - int64(rand.Intn(86400)),
-					Tags:       []string{"electronics", "test"},
+				var body []byte
+				if *bulk {
+					events := make([]Event, *batchSize)
+					for j := 0; j < *batchSize; j++ {
+						events[j] = Event{
+							EventName:  "product_view",
+							Channel:    "web",
+							CampaignID: fmt.Sprintf("cmp_%d", rand.Intn(100)),
+							UserID:     fmt.Sprintf("user_%d", id*(*batchSize)+j),
+							Timestamp:  time.Now().Unix() - int64(rand.Intn(86400)),
+							Tags:       []string{"electronics", "test"},
+						}
+					}
+					body, _ = json.Marshal(events)
+				} else {
+					event := Event{
+						EventName:  "product_view",
+						Channel:    "web",
+						CampaignID: fmt.Sprintf("cmp_%d", rand.Intn(100)),
+						UserID:     fmt.Sprintf("user_%d", id),
+						Timestamp:  time.Now().Unix() - int64(rand.Intn(86400)),
+						Tags:       []string{"electronics", "test"},
+					}
+					body, _ = json.Marshal(event)
 				}
 
-				body, _ := json.Marshal(event)
-
 				reqStart := time.Now()
-				resp, err := client.Post(*url, "application/json", bytes.NewReader(body))
+				resp, err := client.Post(url, "application/json", bytes.NewReader(body))
 				latency := time.Since(reqStart)
 
 				if err != nil {
@@ -129,7 +160,11 @@ func main() {
 	fmt.Printf("Duplicates: %d\n", dupes)
 	fmt.Printf("Failed:     %d\n", fail)
 	fmt.Printf("Duration:   %s\n", elapsed.Round(time.Millisecond))
-	fmt.Printf("RPS:        %.0f req/sec\n", float64(*total)/elapsed.Seconds())
+	fmt.Printf("Requests:   %d\n", numRequests)
+	fmt.Printf("RPS:        %.0f req/sec\n", float64(numRequests)/elapsed.Seconds())
+	if *bulk {
+		fmt.Printf("Events/sec: %.0f\n", float64(*total)/elapsed.Seconds())
+	}
 
 	if len(latencies) > 0 {
 		p50 := latencies[len(latencies)*50/100]

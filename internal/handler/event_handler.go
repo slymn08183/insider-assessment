@@ -60,6 +60,7 @@ func (h *EventHandler) Create(c *gin.Context) {
 }
 
 // BulkCreate — POST /events/bulk
+// Validates all events, then sends valid ones to Redis in a single pipeline.
 func (h *EventHandler) BulkCreate(c *gin.Context) {
 	var events []model.Event
 
@@ -68,22 +69,21 @@ func (h *EventHandler) BulkCreate(c *gin.Context) {
 		return
 	}
 
-	accepted := 0
+	// Validate and generate hashes
+	valid := make([]model.Event, 0, len(events))
 	rejected := 0
-	duplicates := 0
-
 	for i := range events {
-		isDup, err := h.processEvent(c.Request.Context(), &events[i])
-		if err != nil {
+		if err := events[i].ValidateTimestamp(); err != nil {
 			rejected++
 			continue
 		}
-		if isDup {
-			duplicates++
-			continue
-		}
-		accepted++
+		events[i].EventHash = events[i].GenerateHash()
+		valid = append(valid, events[i])
 	}
+
+	// Bulk pipeline — all Redis ops in 2 round-trips
+	accepted, duplicates, bulkRejected := h.queue.BulkCheckAndEnqueue(c.Request.Context(), valid)
+	rejected += bulkRejected
 
 	c.JSON(http.StatusAccepted, gin.H{
 		"accepted":   accepted,

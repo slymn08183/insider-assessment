@@ -30,10 +30,10 @@ func (r *EventRepository) GetMetrics(q model.MetricsQuery) (*model.MetricsResult
 	base := r.db.Model(&model.Event{}).Where("event_name = ?", q.EventName)
 
 	if !q.From.IsZero() {
-		base = base.Where("timestamp >= ?", q.From)
+		base = base.Where("timestamp >= ?", q.From.Unix())
 	}
 	if !q.To.IsZero() {
-		base = base.Where("timestamp <= ?", q.To)
+		base = base.Where("timestamp <= ?", q.To.Unix())
 	}
 	if q.Channel != "" {
 		base = base.Where("channel = ?", q.Channel)
