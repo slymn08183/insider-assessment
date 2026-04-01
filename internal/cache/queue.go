@@ -84,7 +84,11 @@ func (q *EventQueue) BulkCheckAndEnqueue(ctx context.Context, events []model.Eve
 			TTL:  dedupTTL,
 		})
 	}
-	pipe.Exec(ctx)
+	_, execErr := pipe.Exec(ctx)
+	if execErr != nil && !errors.Is(execErr, redis.Nil) {
+		rejected += len(items)
+		return accepted, duplicated, rejected
+	}
 
 	// Filter: only new events (SetNX returned "OK")
 	newItems := make([]eventData, 0, len(items))
