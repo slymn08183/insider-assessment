@@ -8,6 +8,8 @@ import (
 	"github.com/slymn08183/insider-assessment/internal/config"
 	"github.com/slymn08183/insider-assessment/internal/database"
 	"github.com/slymn08183/insider-assessment/internal/handler"
+	"github.com/slymn08183/insider-assessment/internal/repository"
+	"github.com/slymn08183/insider-assessment/internal/worker"
 )
 
 func main() {
@@ -35,14 +37,18 @@ func main() {
 	}
 	defer rdb.Close()
 
-	_ = db
-	_ = rdb
+	queue := cache.NewEventQueue(rdb)
+	repo := repository.NewEventRepository(db)
+
+	w := worker.New(queue, repo, cfg.BatchSize, cfg.FlushInterval)
+	w.Start()
+	defer w.Stop()
 
 	r := gin.Default()
 
 	healthHandler := &handler.HealthHandler{}
-	eventHandler := &handler.EventHandler{}
-	metricsHandler := &handler.MetricsHandler{}
+	eventHandler := handler.NewEventHandler(queue)
+	metricsHandler := handler.NewMetricsHandler(repo)
 
 	healthHandler.RegisterRoutes(r)
 	eventHandler.RegisterRoutes(r)

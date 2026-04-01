@@ -36,6 +36,11 @@ func (q *EventQueue) MarkProcessed(ctx context.Context, hash string) error {
 	return q.client.SAdd(ctx, dedupKey, hash).Err()
 }
 
+// RemoveHash — Rollback icin hash'i set'ten siler.
+func (q *EventQueue) RemoveHash(ctx context.Context, hash string) {
+	q.client.SRem(ctx, dedupKey, hash)
+}
+
 // Enqueue LPUSH
 func (q *EventQueue) Enqueue(ctx context.Context, event *model.Event) error {
 	data, err := json.Marshal(event)

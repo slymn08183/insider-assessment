@@ -2,6 +2,7 @@ package config
 
 import (
 	"fmt"
+	"time"
 
 	"github.com/kelseyhightower/envconfig"
 )
@@ -20,6 +21,10 @@ type Config struct {
 	// Redis
 	RedisHost string `envconfig:"REDIS_HOST" default:"localhost"`
 	RedisPort string `envconfig:"REDIS_PORT" default:"6379"`
+
+	// Worker
+	BatchSize     int           `envconfig:"BATCH_SIZE" default:"500"`
+	FlushInterval time.Duration `envconfig:"FLUSH_INTERVAL" default:"2s"`
 
 	// Migration
 	AutoMigrate bool `envconfig:"AUTO_MIGRATE" default:"true"`
