@@ -79,6 +79,10 @@ Query params: `event_name` (required), `from`/`to` (2026-01-02T15:04:05Z), `chan
 curl http://localhost:8080/health
 ```
 
+### Swagger UI
+
+API docs are available at [http://localhost:8080/swagger/index.html](http://localhost:8080/swagger/index.html) once the server is running.
+
 ## Design Decisions
 
 **Why PostgreSQL?** It handles the required 2K-20K events/sec with batch inserts comfortably. I didn't use ClickHouse because PostgreSQL already meets the min and max throughput requirements, and I didn't want to spend implementation time learning a new tool when the one I know well does the job.
