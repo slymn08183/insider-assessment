@@ -3,6 +3,7 @@ package cache
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"time"
 
@@ -11,8 +12,9 @@ import (
 )
 
 const (
-	queueKey = "events_queue"
-	dedupKey = "event_hashes"
+	queueKey    = "events_queue"
+	dedupPrefix = "dedup:" // each hash gets its own key with TTL
+	dedupTTL    = 24 * time.Hour
 )
 
 type EventQueue struct {
@@ -23,59 +25,31 @@ func NewEventQueue(client *redis.Client) *EventQueue {
 	return &EventQueue{client: client}
 }
 
-func (q *EventQueue) IsDuplicate(ctx context.Context, hash string) (bool, error) {
-	exists, err := q.client.SIsMember(ctx, dedupKey, hash).Result()
-	if err != nil {
-		return false, fmt.Errorf("failed to check duplicate: %w", err)
-	}
-	return exists, nil
-}
-
-// MarkProcessed Set hash
-func (q *EventQueue) MarkProcessed(ctx context.Context, hash string) error {
-	return q.client.SAdd(ctx, dedupKey, hash).Err()
-}
-
-func (q *EventQueue) RemoveHash(ctx context.Context, hash string) {
-	q.client.SRem(ctx, dedupKey, hash)
-}
-
-// Enqueue LPUSH
-func (q *EventQueue) Enqueue(ctx context.Context, event *model.Event) error {
-	data, err := json.Marshal(event)
-	if err != nil {
-		return fmt.Errorf("failed to marshal event: %w", err)
-	}
-	return q.client.LPush(ctx, queueKey, data).Err()
-}
-
 // CheckAndEnqueue — Duplicate check + mark + enqueue
-// Redis Pipeline SADD + LPUSH single round-trip
+// Set with NX: set if not exists, returns true if key was set (new event)
 func (q *EventQueue) CheckAndEnqueue(ctx context.Context, hash string, event *model.Event) (duplicate bool, err error) {
 	data, err := json.Marshal(event)
 	if err != nil {
 		return false, fmt.Errorf("failed to marshal event: %w", err)
 	}
 
-	// Pipeline
-	pipe := q.client.Pipeline()
-	sAddCmd := pipe.SAdd(ctx, dedupKey, hash)
-	lPushCmd := pipe.LPush(ctx, queueKey, data)
-	_, err = pipe.Exec(ctx)
-	if err != nil {
-		return false, fmt.Errorf("pipeline failed: %w", err)
+	// SET key value NX EX (set if not exists), with TTL
+	wasSet, err := q.client.SetArgs(ctx, dedupPrefix+hash, "1", redis.SetArgs{
+		Mode: "NX",
+		TTL:  dedupTTL,
+	}).Result()
+	if err != nil && !errors.Is(err, redis.Nil) {
+		return false, fmt.Errorf("failed to check/set hash: %w", err)
 	}
-
-	// If SADD is 0 means duplicate, remove from queue
-	if sAddCmd.Val() == 0 {
-		q.client.LRem(ctx, queueKey, 1, data)
+	if wasSet != "OK" {
+		// duplicate
 		return true, nil
 	}
 
-	// On LPUSH error rollback
-	if lPushCmd.Err() != nil {
-		q.client.SRem(ctx, dedupKey, hash)
-		return false, fmt.Errorf("failed to enqueue: %w", lPushCmd.Err())
+	// New event - enqueue
+	if err := q.client.LPush(ctx, queueKey, data).Err(); err != nil {
+		q.client.Del(ctx, dedupPrefix+hash)
+		return false, fmt.Errorf("failed to enqueue: %w", err)
 	}
 
 	return false, nil

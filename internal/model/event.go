@@ -11,7 +11,7 @@ import (
 // Event payload
 type Event struct {
 	ID         uint                        `json:"-"              gorm:"primaryKey"`
-	EventHash  string                      `json:"-"              gorm:"uniqueIndex;size:64;not null"`
+	EventHash  string                      `json:"event_hash"     gorm:"uniqueIndex;size:64;not null"`
 	EventName  string                      `json:"event_name"     gorm:"index;size:255;not null"  binding:"required"`
 	Channel    string                      `json:"channel"        gorm:"index;size:100"`
 	CampaignID string                      `json:"campaign_id"    gorm:"size:100"`
