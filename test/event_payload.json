@@ -1,0 +1,13 @@
+{
+  "event_name": "product_view",
+  "channel": "web",
+  "campaign_id": "cmp_987",
+  "user_id": "user_123",
+  "timestamp": 1723475612,
+  "tags": ["electronics", "homepage"],
+  "metadata": {
+    "product_id": "prod-789",
+    "price": 129.99,
+    "currency": "TRY"
+  }
+}

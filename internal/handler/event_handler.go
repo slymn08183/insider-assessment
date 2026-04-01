@@ -31,24 +31,7 @@ func (h *EventHandler) processEvent(ctx context.Context, event *model.Event) (du
 
 	event.EventHash = event.GenerateHash()
 
-	isDup, err := h.queue.IsDuplicate(ctx, event.EventHash)
-	if err != nil {
-		return false, err
-	}
-	if isDup {
-		return true, nil
-	}
-
-	if err := h.queue.MarkProcessed(ctx, event.EventHash); err != nil {
-		return false, err
-	}
-
-	if err := h.queue.Enqueue(ctx, event); err != nil {
-		h.queue.RemoveHash(ctx, event.EventHash)
-		return false, err
-	}
-
-	return false, nil
+	return h.queue.CheckAndEnqueue(ctx, event.EventHash, event)
 }
 
 // Create — POST /events

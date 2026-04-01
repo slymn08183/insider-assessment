@@ -4,20 +4,22 @@ import (
 	"crypto/sha256"
 	"fmt"
 	"time"
+
+	"gorm.io/datatypes"
 )
 
 // Event payload
 type Event struct {
-	ID         uint        `json:"-"              gorm:"primaryKey"`
-	EventHash  string      `json:"-"              gorm:"uniqueIndex;size:64;not null"`
-	EventName  string      `json:"event_name"     gorm:"index;size:255;not null"  binding:"required"`
-	Channel    string      `json:"channel"        gorm:"index;size:100"`
-	CampaignID string      `json:"campaign_id"    gorm:"size:100"`
-	UserID     string      `json:"user_id"        gorm:"index;size:255;not null"  binding:"required"`
-	Timestamp  int64       `json:"timestamp"      gorm:"index;not null"           binding:"required"`
-	Tags       StringSlice `json:"tags"           gorm:"type:jsonb;default:'[]'"`
-	Metadata   JSONMap     `json:"metadata"       gorm:"type:jsonb;default:'{}'"`
-	CreatedAt  time.Time   `json:"-"              gorm:"autoCreateTime"`
+	ID         uint                        `json:"-"              gorm:"primaryKey"`
+	EventHash  string                      `json:"-"              gorm:"uniqueIndex;size:64;not null"`
+	EventName  string                      `json:"event_name"     gorm:"index;size:255;not null"  binding:"required"`
+	Channel    string                      `json:"channel"        gorm:"index;size:100"`
+	CampaignID string                      `json:"campaign_id"    gorm:"size:100"`
+	UserID     string                      `json:"user_id"        gorm:"index;size:255;not null"  binding:"required"`
+	Timestamp  int64                       `json:"timestamp"      gorm:"index;not null"           binding:"required"`
+	Tags       datatypes.JSONSlice[string] `json:"tags"           gorm:"type:jsonb;default:'[]'"`
+	Metadata   datatypes.JSONMap           `json:"metadata"       gorm:"type:jsonb;default:'{}'"`
+	CreatedAt  time.Time                   `json:"-"              gorm:"autoCreateTime"`
 }
 
 // GenerateHash Generates fingerprint for idempotency
