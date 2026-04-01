@@ -17,7 +17,17 @@ import (
 	"github.com/slymn08183/insider-assessment/internal/handler"
 	"github.com/slymn08183/insider-assessment/internal/repository"
 	"github.com/slymn08183/insider-assessment/internal/worker"
+	swaggerFiles "github.com/swaggo/files"
+	ginSwagger "github.com/swaggo/gin-swagger"
+
+	_ "github.com/slymn08183/insider-assessment/docs"
 )
+
+// @title Insider Event Ingestion API
+// @version 1.0
+// @description High-throughput event ingestion service. Accepts events via HTTP, queues in Redis, batch-writes to PostgreSQL.
+// @host localhost:8080
+// @BasePath /
 
 func main() {
 	cfg, err := config.Load()
@@ -59,6 +69,9 @@ func main() {
 	healthHandler.RegisterRoutes(r)
 	eventHandler.RegisterRoutes(r)
 	metricsHandler.RegisterRoutes(r)
+
+	// Swagger UI
+	r.GET("/swagger/*any", ginSwagger.WrapHandler(swaggerFiles.Handler))
 
 	// HTTP server — manual setup for graceful shutdown
 	srv := &http.Server{

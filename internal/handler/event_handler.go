@@ -34,38 +34,56 @@ func (h *EventHandler) processEvent(ctx context.Context, event *model.Event) (du
 	return h.queue.CheckAndEnqueue(ctx, event.EventHash, event)
 }
 
-// Create — POST /events
+// Create godoc
+// @Summary Ingest a single event
+// @Description Validates the event, checks for duplicates, and queues it for processing
+// @Tags events
+// @Accept json
+// @Produce json
+// @Param event body model.Event true "Event payload"
+// @Success 202 {object} model.EventResponse
+// @Failure 400 {object} model.ErrorResponse
+// @Failure 409 {object} model.ErrorResponse
+// @Router /events [post]
 func (h *EventHandler) Create(c *gin.Context) {
 	var event model.Event
 
 	if err := c.ShouldBindJSON(&event); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		c.JSON(http.StatusBadRequest, model.ErrorResponse{Error: err.Error()})
 		return
 	}
 
 	isDup, err := h.processEvent(c.Request.Context(), &event)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		c.JSON(http.StatusBadRequest, model.ErrorResponse{Error: err.Error()})
 		return
 	}
 	if isDup {
-		c.JSON(http.StatusConflict, gin.H{"error": "duplicate event"})
+		c.JSON(http.StatusConflict, model.ErrorResponse{Error: "duplicate event"})
 		return
 	}
 
-	c.JSON(http.StatusAccepted, gin.H{
-		"status":     "accepted",
-		"event_hash": event.EventHash,
+	c.JSON(http.StatusAccepted, model.EventResponse{
+		Status:    "accepted",
+		EventHash: event.EventHash,
 	})
 }
 
-// BulkCreate — POST /events/bulk
-// Validates all events, then sends valid ones to Redis in a single pipeline.
+// BulkCreate godoc
+// @Summary Ingest multiple events
+// @Description Validates each event, deduplicates, and queues via Redis pipeline
+// @Tags events
+// @Accept json
+// @Produce json
+// @Param events body []model.Event true "Array of events"
+// @Success 202 {object} model.BulkResponse
+// @Failure 400 {object} model.ErrorResponse
+// @Router /events/bulk [post]
 func (h *EventHandler) BulkCreate(c *gin.Context) {
 	var events []model.Event
 
 	if err := c.ShouldBindJSON(&events); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		c.JSON(http.StatusBadRequest, model.ErrorResponse{Error: err.Error()})
 		return
 	}
 
@@ -85,9 +103,9 @@ func (h *EventHandler) BulkCreate(c *gin.Context) {
 	accepted, duplicates, bulkRejected := h.queue.BulkCheckAndEnqueue(c.Request.Context(), valid)
 	rejected += bulkRejected
 
-	c.JSON(http.StatusAccepted, gin.H{
-		"accepted":   accepted,
-		"rejected":   rejected,
-		"duplicates": duplicates,
+	c.JSON(http.StatusAccepted, model.BulkResponse{
+		Accepted:   accepted,
+		Rejected:   rejected,
+		Duplicates: duplicates,
 	})
 }

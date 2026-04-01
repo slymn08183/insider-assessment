@@ -1,0 +1,310 @@
+{
+    "swagger": "2.0",
+    "info": {
+        "description": "High-throughput event ingestion service. Accepts events via HTTP, queues in Redis, batch-writes to PostgreSQL.",
+        "title": "Insider Event Ingestion API",
+        "contact": {},
+        "version": "1.0"
+    },
+    "host": "localhost:8080",
+    "basePath": "/",
+    "paths": {
+        "/events": {
+            "post": {
+                "description": "Validates the event, checks for duplicates, and queues it for processing",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "events"
+                ],
+                "summary": "Ingest a single event",
+                "parameters": [
+                    {
+                        "description": "Event payload",
+                        "name": "event",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/model.Event"
+                        }
+                    }
+                ],
+                "responses": {
+                    "202": {
+                        "description": "Accepted",
+                        "schema": {
+                            "$ref": "#/definitions/model.EventResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/model.ErrorResponse"
+                        }
+                    },
+                    "409": {
+                        "description": "Conflict",
+                        "schema": {
+                            "$ref": "#/definitions/model.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/events/bulk": {
+            "post": {
+                "description": "Validates each event, deduplicates, and queues via Redis pipeline",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "events"
+                ],
+                "summary": "Ingest multiple events",
+                "parameters": [
+                    {
+                        "description": "Array of events",
+                        "name": "events",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "type": "array",
+                            "items": {
+                                "$ref": "#/definitions/model.Event"
+                            }
+                        }
+                    }
+                ],
+                "responses": {
+                    "202": {
+                        "description": "Accepted",
+                        "schema": {
+                            "$ref": "#/definitions/model.BulkResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/model.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/health": {
+            "get": {
+                "description": "Returns OK if the service is running",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "health"
+                ],
+                "summary": "Health check",
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/model.HealthResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/metrics": {
+            "get": {
+                "description": "Returns event counts, unique users, and optional daily/hourly breakdown",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "metrics"
+                ],
+                "summary": "Get aggregated metrics",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Event name to filter",
+                        "name": "event_name",
+                        "in": "query",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "Start time (RFC3339)",
+                        "name": "from",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "End time (RFC3339)",
+                        "name": "to",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "Filter by channel",
+                        "name": "channel",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "Breakdown period: daily or hourly",
+                        "name": "group_by",
+                        "in": "query"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/model.MetricsResult"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/model.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        }
+    },
+    "definitions": {
+        "model.BreakdownRow": {
+            "type": "object",
+            "properties": {
+                "count": {
+                    "type": "integer",
+                    "example": 51723
+                },
+                "period": {
+                    "type": "string",
+                    "example": "2026-03-31T00:00:00Z"
+                },
+                "unique_users": {
+                    "type": "integer",
+                    "example": 19500
+                }
+            }
+        },
+        "model.BulkResponse": {
+            "type": "object",
+            "properties": {
+                "accepted": {
+                    "type": "integer",
+                    "example": 98
+                },
+                "duplicates": {
+                    "type": "integer",
+                    "example": 1
+                },
+                "rejected": {
+                    "type": "integer",
+                    "example": 1
+                }
+            }
+        },
+        "model.ErrorResponse": {
+            "type": "object",
+            "properties": {
+                "error": {
+                    "type": "string",
+                    "example": "event_name is required"
+                }
+            }
+        },
+        "model.Event": {
+            "type": "object",
+            "required": [
+                "event_name",
+                "timestamp",
+                "user_id"
+            ],
+            "properties": {
+                "campaign_id": {
+                    "type": "string",
+                    "example": "cmp_987"
+                },
+                "channel": {
+                    "type": "string",
+                    "example": "web"
+                },
+                "event_name": {
+                    "type": "string",
+                    "example": "product_view"
+                },
+                "metadata": {
+                    "type": "object"
+                },
+                "tags": {
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                },
+                "timestamp": {
+                    "type": "integer",
+                    "example": 1723475612
+                },
+                "user_id": {
+                    "type": "string",
+                    "example": "user_123"
+                }
+            }
+        },
+        "model.EventResponse": {
+            "type": "object",
+            "properties": {
+                "event_hash": {
+                    "type": "string",
+                    "example": "22f0e08a61d49a38798bec697afec95ffc00ba8af2e29639d4e91a15e1dbcea3"
+                },
+                "status": {
+                    "type": "string",
+                    "example": "accepted"
+                }
+            }
+        },
+        "model.HealthResponse": {
+            "type": "object",
+            "properties": {
+                "message": {
+                    "type": "string",
+                    "example": "The API is up and running"
+                },
+                "status": {
+                    "type": "string",
+                    "example": "ok"
+                }
+            }
+        },
+        "model.MetricsResult": {
+            "type": "object",
+            "properties": {
+                "breakdown": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/model.BreakdownRow"
+                    }
+                },
+                "total_count": {
+                    "type": "integer",
+                    "example": 99996
+                },
+                "unique_users": {
+                    "type": "integer",
+                    "example": 20000
+                }
+            }
+        }
+    }
+}

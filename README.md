@@ -105,7 +105,11 @@ Redis pipeline batches all commands into a single network call. Instead of 200 r
 
 **Dedup TTL is 24 hours.** After that, the Redis key expires and the hash is gone. If the same event shows up again, Redis won't catch it, but the DB's unique constraint will. This keeps Redis memory from growing forever.
 
-**Worker crash resilience.** If the process gets killed hard (kill -9, OOM), up to 499 buffered events can be lost. Events still sitting in the Redis queue would survive. In production I'd use an acknowledgment pattern: move events to a "processing" list on dequeue, delete only after DB write. On crash, unprocessed events stay in Redis and get retried.
+**Worker crash resilience.** Right now, the worker pulls events from Redis one by one into an in-memory buffer and flushes when it hits 500. If the process gets killed hard (kill -9, OOM), whatever's in that buffer is gone - up to 499 events. Events still sitting in the Redis queue survive, but the ones already pulled out don't.
+
+The fix I'd use in production is an acknowledgment pattern with `LMOVE` Instead of popping events and hoping for the best, you move them from the main queue to a "processing" list. Write to DB, then delete from the processing list. If the worker crashes mid-write, those events are still in the processing list on restart, you check it first and retry. The event is always somewhere: either in the queue, in the processing list, or in the database.
+
+I didn't implement this because 48 hours is tight and the current approach handles normal shutdowns cleanly (graceful shutdown flushes the buffer). But this is the first thing I'd add before going to production.
 
 ## Load Test Results
 

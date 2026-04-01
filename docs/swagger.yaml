@@ -1,0 +1,210 @@
+basePath: /
+definitions:
+  model.BreakdownRow:
+    properties:
+      count:
+        example: 51723
+        type: integer
+      period:
+        example: "2026-03-31T00:00:00Z"
+        type: string
+      unique_users:
+        example: 19500
+        type: integer
+    type: object
+  model.BulkResponse:
+    properties:
+      accepted:
+        example: 98
+        type: integer
+      duplicates:
+        example: 1
+        type: integer
+      rejected:
+        example: 1
+        type: integer
+    type: object
+  model.ErrorResponse:
+    properties:
+      error:
+        example: event_name is required
+        type: string
+    type: object
+  model.Event:
+    properties:
+      campaign_id:
+        example: cmp_987
+        type: string
+      channel:
+        example: web
+        type: string
+      event_name:
+        example: product_view
+        type: string
+      metadata:
+        type: object
+      tags:
+        items:
+          type: string
+        type: array
+      timestamp:
+        example: 1723475612
+        type: integer
+      user_id:
+        example: user_123
+        type: string
+    required:
+    - event_name
+    - timestamp
+    - user_id
+    type: object
+  model.EventResponse:
+    properties:
+      event_hash:
+        example: 22f0e08a61d49a38798bec697afec95ffc00ba8af2e29639d4e91a15e1dbcea3
+        type: string
+      status:
+        example: accepted
+        type: string
+    type: object
+  model.HealthResponse:
+    properties:
+      message:
+        example: The API is up and running
+        type: string
+      status:
+        example: ok
+        type: string
+    type: object
+  model.MetricsResult:
+    properties:
+      breakdown:
+        items:
+          $ref: '#/definitions/model.BreakdownRow'
+        type: array
+      total_count:
+        example: 99996
+        type: integer
+      unique_users:
+        example: 20000
+        type: integer
+    type: object
+host: localhost:8080
+info:
+  contact: {}
+  description: High-throughput event ingestion service. Accepts events via HTTP, queues
+    in Redis, batch-writes to PostgreSQL.
+  title: Insider Event Ingestion API
+  version: "1.0"
+paths:
+  /events:
+    post:
+      consumes:
+      - application/json
+      description: Validates the event, checks for duplicates, and queues it for processing
+      parameters:
+      - description: Event payload
+        in: body
+        name: event
+        required: true
+        schema:
+          $ref: '#/definitions/model.Event'
+      produces:
+      - application/json
+      responses:
+        "202":
+          description: Accepted
+          schema:
+            $ref: '#/definitions/model.EventResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/model.ErrorResponse'
+        "409":
+          description: Conflict
+          schema:
+            $ref: '#/definitions/model.ErrorResponse'
+      summary: Ingest a single event
+      tags:
+      - events
+  /events/bulk:
+    post:
+      consumes:
+      - application/json
+      description: Validates each event, deduplicates, and queues via Redis pipeline
+      parameters:
+      - description: Array of events
+        in: body
+        name: events
+        required: true
+        schema:
+          items:
+            $ref: '#/definitions/model.Event'
+          type: array
+      produces:
+      - application/json
+      responses:
+        "202":
+          description: Accepted
+          schema:
+            $ref: '#/definitions/model.BulkResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/model.ErrorResponse'
+      summary: Ingest multiple events
+      tags:
+      - events
+  /health:
+    get:
+      description: Returns OK if the service is running
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/model.HealthResponse'
+      summary: Health check
+      tags:
+      - health
+  /metrics:
+    get:
+      description: Returns event counts, unique users, and optional daily/hourly breakdown
+      parameters:
+      - description: Event name to filter
+        in: query
+        name: event_name
+        required: true
+        type: string
+      - description: Start time (RFC3339)
+        in: query
+        name: from
+        type: string
+      - description: End time (RFC3339)
+        in: query
+        name: to
+        type: string
+      - description: Filter by channel
+        in: query
+        name: channel
+        type: string
+      - description: 'Breakdown period: daily or hourly'
+        in: query
+        name: group_by
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/model.MetricsResult'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/model.ErrorResponse'
+      summary: Get aggregated metrics
+      tags:
+      - metrics
+swagger: "2.0"

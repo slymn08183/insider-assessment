@@ -30,14 +30,14 @@ func (q *MetricsQuery) Validate() error {
 
 // MetricsResult Aggregated metric results
 type MetricsResult struct {
-	TotalCount  int64          `json:"total_count"`
-	UniqueUsers int64          `json:"unique_users"`
+	TotalCount  int64          `json:"total_count" example:"99996"`
+	UniqueUsers int64          `json:"unique_users" example:"20000"`
 	Breakdown   []BreakdownRow `json:"breakdown"`
 }
 
 // BreakdownRow group_by results
 type BreakdownRow struct {
-	Period      string `json:"period"`
-	Count       int64  `json:"count"`
-	UniqueUsers int64  `json:"unique_users"`
+	Period      string `json:"period" example:"2026-03-31T00:00:00Z"`
+	Count       int64  `json:"count" example:"51723"`
+	UniqueUsers int64  `json:"unique_users" example:"19500"`
 }
